@@ -4,6 +4,26 @@
 #include <VkBootstrap.h>
 #include <GLFW/glfw3.h>
 #include <vector>
+#include <deque>
+#include <functional>
+
+#include <vk_mem_alloc.h>
+
+struct DeletionQueue
+{
+    std::deque<std::function<void()>> deletors;
+    void push_function(std::function<void()>&& function){
+        deletors.push_back(function);
+    }
+
+    void flush(){
+        for(auto it = deletors.rbegin(); it != deletors.rend(); it++){
+            (*it)();
+        }
+        deletors.clear();
+    }
+};
+
 
 struct FrameData {
     VkCommandPool commandPool = VK_NULL_HANDLE;
@@ -11,6 +31,7 @@ struct FrameData {
     VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
     VkSemaphore renderSemaphore = VK_NULL_HANDLE;
     VkFence renderFence = VK_NULL_HANDLE;
+    DeletionQueue deletionQueue;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 4;
@@ -57,7 +78,10 @@ class VulkanContext{
         VkQueue        graphics_queue = VK_NULL_HANDLE;
         uint32_t       graphics_queue_family = 0;
         VkSurfaceKHR   surface  = VK_NULL_HANDLE;
-        
+        DeletionQueue  mainDeletionQueue;
+        VmaAllocator allocator;
+
+
         int frameNumber = 0;
 
         void create_swapchain(uint32_t width, uint32_t height);

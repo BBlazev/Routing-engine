@@ -20,6 +20,13 @@ FetchContent_Declare(
     GIT_TAG        v1.3.296
     GIT_SHALLOW    ON
 )
+FetchContent_Declare(
+    vma
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+    GIT_TAG        v3.2.1
+    GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(vma)
 FetchContent_MakeAvailable(vk-bootstrap)
 
 message(STATUS "Vulkan found:       ${Vulkan_INCLUDE_DIRS}")

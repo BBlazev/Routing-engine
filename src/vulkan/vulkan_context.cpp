@@ -11,6 +11,17 @@ void VulkanContext::init_vulkan(){
     init_commands();
     init_sync_structures();
 
+
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.physicalDevice = physical_device;
+    allocatorInfo.device = device;
+    allocatorInfo.instance = instance;
+    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    vmaCreateAllocator(&allocatorInfo, &allocator);
+
+    mainDeletionQueue.push_function([&](){
+        vmaDestroyAllocator(allocator);
+    });
 }
 
 
@@ -106,8 +117,12 @@ VulkanContext::~VulkanContext(){
         vkDestroyFence(device, frame.renderFence, nullptr);
         vkDestroySemaphore(device, frame.renderSemaphore, nullptr);
         vkDestroySemaphore(device, frame.swapchainSemaphore, nullptr);
+
+        frame.deletionQueue.flush();
     }
     
+    mainDeletionQueue.flush();
+
     destroy_swapchain();
 
 
@@ -271,7 +286,10 @@ void VulkanContext::draw(){
 
 
 	VK_CHECK(vkWaitForFences(device, 1, &get_current_frame().renderFence, true, 1000000000));
-	VK_CHECK(vkResetFences(device, 1, &get_current_frame().renderFence));
+	
+    get_current_frame().deletionQueue.flush();
+    
+    VK_CHECK(vkResetFences(device, 1, &get_current_frame().renderFence));
 
     uint32_t swapchainImageIndex;
     VK_CHECK(vkAcquireNextImageKHR(device, swapchain, 1000000000, get_current_frame().swapchainSemaphore, nullptr, &swapchainImageIndex));

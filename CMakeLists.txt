@@ -40,6 +40,7 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/vulkan/window.cpp
     src/vulkan/vulkan_context.cpp
+    src/vulkan/vma_impl.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -51,6 +52,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw
     glm::glm
     vk-bootstrap::vk-bootstrap
+    GPUOpen::VulkanMemoryAllocator
     Threads::Threads
 )
 
