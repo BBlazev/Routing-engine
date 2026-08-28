@@ -166,6 +166,38 @@ void VulkanContext::create_swapchain(uint32_t width, uint32_t height){
 
 void VulkanContext::init_swapchain(){
     create_swapchain(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    VkExtent3D drawImageExtent = {
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        1
+    };
+
+    drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    drawImage.imageExtent = drawImageExtent;
+
+    VkImageUsageFlags drawImageUsages{};
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    VkImageCreateInfo rimg_info = image_create_info(drawImage.imageFormat, drawImageUsages, drawImageExtent);
+
+    VmaAllocationCreateInfo rimg_allocinfo = {};
+    rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+
+    vmaCreateImage(allocator, &rimg_info, &rimg_allocinfo, &drawImage.image, &drawImage.allocation, nullptr);
+    VkImageViewCreateInfo rview_info = imageview_create_info(drawImage.imageFormat, drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VK_CHECK(vkCreateImageView(device, &rview_info, nullptr, &drawImage.imageView));
+
+	mainDeletionQueue.push_function([=]() {
+		vkDestroyImageView(device, drawImage.imageView, nullptr);
+		vmaDestroyImage(allocator, drawImage.image, drawImage.allocation);
+    });
 }
 
 void VulkanContext::destroy_swapchain(){
@@ -265,6 +297,43 @@ VkSubmitInfo2 VulkanContext::submit_info(VkCommandBufferSubmitInfo* cmd, VkSemap
 
     info.commandBufferInfoCount = 1;
     info.pCommandBufferInfos = cmd;
+
+    return info;
+}
+
+VkImageCreateInfo VulkanContext::image_create_info(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent){
+    
+    VkImageCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.pNext = nullptr;
+
+    info.imageType = VK_IMAGE_TYPE_2D;
+
+    info.format = format;
+    info.extent = extent;
+
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.usage = usageFlags;
+
+    return info;
+}
+VkImageViewCreateInfo VulkanContext::imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags){
+
+    VkImageViewCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    info.pNext = nullptr;
+    info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    info.image = image;
+    info.format = format;
+    info.subresourceRange.baseMipLevel = 0;
+    info.subresourceRange.levelCount = 1;
+    info.subresourceRange.baseArrayLayer = 0;
+    info.subresourceRange.layerCount = 1;
+    info.subresourceRange.aspectMask = aspectFlags;
 
     return info;
 }
