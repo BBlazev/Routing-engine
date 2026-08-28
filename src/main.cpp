@@ -22,8 +22,7 @@ int main() {
                 glfwSetWindowShouldClose(window.get_window(), GLFW_TRUE);
             }
 
-            // TODO Phase 1: acquire swapchain image, record commands, present
-            // For now, the window just sits there. That's fine.
+            vk.draw();
         }
 
     } catch (const std::exception& e) {

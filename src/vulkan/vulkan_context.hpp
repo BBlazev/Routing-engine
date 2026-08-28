@@ -8,9 +8,12 @@
 struct FrameData {
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkCommandBuffer mainCommandBuffer = VK_NULL_HANDLE;
+    VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
+    VkSemaphore renderSemaphore = VK_NULL_HANDLE;
+    VkFence renderFence = VK_NULL_HANDLE;
 };
 
-constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr unsigned int FRAME_OVERLAP = 4;
 
 class VulkanContext{
     public:
@@ -41,6 +44,9 @@ class VulkanContext{
         void init_vulkan();
         void init_swapchain();
         void init_commands();
+        void init_sync_structures();
+        void draw();
+
 
     private:
         vkb::Instance  vkb_instance;
@@ -56,6 +62,15 @@ class VulkanContext{
 
         void create_swapchain(uint32_t width, uint32_t height);
         void destroy_swapchain();
+
+        VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
+        VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
+        VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags =0);
+        VkSemaphoreSubmitInfo semaphore_submit_info(VkPipelineStageFlags2 stageMask, VkSemaphore semaphore);
+        VkCommandBufferSubmitInfo command_buffer_submit_info(VkCommandBuffer cmd);
+        VkSubmitInfo2 submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signalSemaphoreInfo, VkSemaphoreSubmitInfo* waitSemaphoreInfo);
+
+
 
 };
 

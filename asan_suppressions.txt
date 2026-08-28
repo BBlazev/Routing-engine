@@ -1,0 +1,6 @@
+leak:libfontconfig
+leak:libpango
+leak:libdecor
+leak:libglfw
+leak:libvulkan
+leak:asan_thread_start
