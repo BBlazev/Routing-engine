@@ -1,0 +1,17 @@
+# Build directories
+build/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
+.cache/
+
+# Compiled shaders (generated at build time)
+*.spv
+
+# junk
+.DS_Store
+Thumbs.db
+note.txt
