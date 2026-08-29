@@ -8,7 +8,8 @@
 #include <functional>
 
 #include <vk_mem_alloc.h>
-
+#include <vulkan/vk_descriptors.hpp>
+#include <vulkan/vk_pipelines.hpp>
 
 struct AllocatedImage{
     VkImage image;
@@ -65,6 +66,12 @@ class VulkanContext{
         VkSwapchainKHR swapchain;
         VkFormat swapchainImageFormat;
 
+        DescriptorAllocator globalDescriptorAllocator;
+        VkDescriptorSet drawImageDescriptors;
+        VkDescriptorSetLayout drawImageDescriptorLayout;
+        VkPipeline gradientPipeline;
+        VkPipelineLayout gradientPipelineLayout;
+
         std::vector<VkImage> swapchainImages;
         std::vector<VkImageView> swapchainImageViews;
         VkExtent2D swapchainExtent;
@@ -73,13 +80,9 @@ class VulkanContext{
         [[nodiscard]] VkQueue get_graphics_queue() const { return graphics_queue; }
         [[nodiscard]] uint32_t get_graphics_queue_family() const { return graphics_queue_family; }
 
-        void init_vulkan();
-        void init_swapchain();
-        void init_commands();
-        void init_sync_structures();
         void draw();
         void draw_background(VkCommandBuffer cmd);
-
+        
     private:
         vkb::Instance  vkb_instance;
         vkb::Device    vkb_device;
@@ -93,7 +96,14 @@ class VulkanContext{
         VmaAllocator allocator;
         AllocatedImage drawImage;
         VkExtent2D drawExtent;
-
+        
+        void init_vulkan();
+        void init_swapchain();
+        void init_commands();
+        void init_sync_structures();
+        void init_descriptors();
+        void init_pipelines();
+        void init_background_pipelines();
 
         int frameNumber = 0;
 

@@ -23,6 +23,7 @@ int main() {
             }
 
             vk.draw();
+            
         }
 
     } catch (const std::exception& e) {

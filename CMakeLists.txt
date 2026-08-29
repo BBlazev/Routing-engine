@@ -41,6 +41,8 @@ add_executable(${PROJECT_NAME}
     src/vulkan/window.cpp
     src/vulkan/vulkan_context.cpp
     src/vulkan/vma_impl.cpp
+    src/vulkan/vk_descriptors.cpp
+    src/vulkan/vk_pipelines.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
