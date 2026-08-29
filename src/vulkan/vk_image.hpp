@@ -42,7 +42,7 @@ inline void transition_image(VkCommandBuffer cmd, VkImage image, VkImageLayout c
     vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-inline void copy_image_to_image(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize)
+inline void copy_image_to_image(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent3D srcSize, VkExtent2D dstSize)
 {
 	VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
 

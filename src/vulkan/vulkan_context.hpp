@@ -78,7 +78,7 @@ class VulkanContext{
         void init_commands();
         void init_sync_structures();
         void draw();
-
+        void draw_background(VkCommandBuffer cmd);
 
     private:
         vkb::Instance  vkb_instance;

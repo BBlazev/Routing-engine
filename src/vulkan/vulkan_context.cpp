@@ -12,16 +12,7 @@ void VulkanContext::init_vulkan(){
     init_sync_structures();
 
 
-    VmaAllocatorCreateInfo allocatorInfo = {};
-    allocatorInfo.physicalDevice = physical_device;
-    allocatorInfo.device = device;
-    allocatorInfo.instance = instance;
-    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-    vmaCreateAllocator(&allocatorInfo, &allocator);
 
-    mainDeletionQueue.push_function([&](){
-        vmaDestroyAllocator(allocator);
-    });
 }
 
 
@@ -74,14 +65,19 @@ VulkanContext::VulkanContext(GLFWwindow* window){
                 << VK_VERSION_PATCH(props.apiVersion) << "\n";
 
 
-        VkPhysicalDeviceVulkan13Features features13{};
-        features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        features13.synchronization2 = VK_TRUE;
-        features13.dynamicRendering = VK_TRUE;  
+    VkPhysicalDeviceVulkan12Features features12{};
+    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features12.bufferDeviceAddress = VK_TRUE;
 
-        auto device_result = vkb::DeviceBuilder{phys_result.value()}
-            .add_pNext(&features13)
-            .build();
+    VkPhysicalDeviceVulkan13Features features13{};
+    features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features13.synchronization2 = VK_TRUE;
+    features13.dynamicRendering = VK_TRUE;
+
+    auto device_result = vkb::DeviceBuilder{phys_result.value()}
+        .add_pNext(&features12)
+        .add_pNext(&features13)
+        .build();
 
     if (!device_result) {
         throw std::runtime_error(
@@ -101,6 +97,17 @@ VulkanContext::VulkanContext(GLFWwindow* window){
 
     graphics_queue = queue_result.value();
     graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
+
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.physicalDevice = physical_device;
+    allocatorInfo.device = device;
+    allocatorInfo.instance = instance;
+    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    vmaCreateAllocator(&allocatorInfo, &allocator);
+
+    mainDeletionQueue.push_function([&](){
+        vmaDestroyAllocator(allocator);
+    });
 
 
     init_vulkan();
@@ -350,9 +357,7 @@ void VulkanContext::init_sync_structures(){
 		VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &frames[i].renderSemaphore));
 	}
 }
-
 void VulkanContext::draw(){
-
 
 	VK_CHECK(vkWaitForFences(device, 1, &get_current_frame().renderFence, true, 1000000000));
 	
@@ -371,16 +376,17 @@ void VulkanContext::draw(){
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    transition_image(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    VkClearColorValue clearValue;
-	float flash = std::abs(std::sin(frameNumber / 120.f));
-	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
+    transition_image(cmd, drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-    VkImageSubresourceRange clearRange = image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+    draw_background(cmd);
 
-	vkCmdClearColorImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+    transition_image(cmd, drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-	transition_image(cmd, swapchainImages[swapchainImageIndex],VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    transition_image(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    copy_image_to_image(cmd, drawImage.image, swapchainImages[swapchainImageIndex], drawImage.imageExtent, swapchainExtent);
+
+    transition_image(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	VK_CHECK(vkEndCommandBuffer(cmd));
 
@@ -392,6 +398,7 @@ void VulkanContext::draw(){
 	VkSubmitInfo2 submit = submit_info(&cmdinfo,&signalInfo,&waitInfo);	
 
 	VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit, get_current_frame().renderFence));
+
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext = nullptr;
@@ -406,4 +413,13 @@ void VulkanContext::draw(){
 	VK_CHECK(vkQueuePresentKHR(graphics_queue, &presentInfo));
 
 	frameNumber++;
+}
+
+void VulkanContext::draw_background(VkCommandBuffer cmd){
+    
+    VkClearColorValue clearValue;
+	float flash = std::abs(std::sin(frameNumber / 120.f));
+	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
+	VkImageSubresourceRange clearRange = image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+	vkCmdClearColorImage(cmd, drawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
 }
