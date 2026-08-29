@@ -15,6 +15,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include <glm/glm.hpp>
+
 struct AllocatedImage{
     VkImage image;
     VkImageView imageView;
@@ -23,7 +25,12 @@ struct AllocatedImage{
     VkFormat imageFormat;
 };
 
-
+struct ComputePushConstants {
+    glm::vec4 data1;
+    glm::vec4 data2;
+    glm::vec4 data3;
+    glm::vec4 data4;
+};
 
 struct DeletionQueue
 {
@@ -84,15 +91,17 @@ class VulkanContext{
         VkCommandBuffer immCommandBuffer = VK_NULL_HANDLE;
         VkCommandPool immCommandPool = VK_NULL_HANDLE;
 
-        void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
-
+        ComputePushConstants pushConstants;
+        
+        
         [[nodiscard]] VkDevice get_device() const { return device; }
         [[nodiscard]] VkQueue get_graphics_queue() const { return graphics_queue; }
         [[nodiscard]] uint32_t get_graphics_queue_family() const { return graphics_queue_family; }
-
+        
         void draw();
         void draw_background(VkCommandBuffer cmd);
+        void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
     
     private:
         vkb::Instance  vkb_instance;
@@ -108,7 +117,7 @@ class VulkanContext{
         AllocatedImage drawImage;
         VkExtent2D drawExtent;
         GLFWwindow* glfwWindow = nullptr;
-        
+
         void init_vulkan();
         void init_swapchain();
         void init_commands();

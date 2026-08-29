@@ -110,7 +110,8 @@ VulkanContext::VulkanContext(GLFWwindow* window){
         vmaDestroyAllocator(allocator);
     });
 
-
+    pushConstants.data1 = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);  
+    pushConstants.data2 = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);  
     init_vulkan();
 }
 
@@ -393,39 +394,13 @@ void VulkanContext::draw() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-
-    ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-
-    if (ImGui::Begin("debug")) {
-
-
+    ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("background")) {
         ImGui::Text("Frame: %d", frameNumber);
         ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-
         ImGui::Separator();
-
-
-        static float speed = 1.0f;
-        ImGui::SliderFloat("Speed", &speed, 0.0f, 10.0f);
-
-
-        static float color[4] = {0.0f, 0.0f, 1.0f, 1.0f};
-        ImGui::ColorEdit4("Clear Color", color);
-
-
-        if (ImGui::Button("Reset")) {
-            speed = 1.0f;
-        }
-
-
-        static bool wireframe = false;
-        ImGui::Checkbox("Wireframe", &wireframe);
-
-        if (ImGui::CollapsingHeader("Stats")) {
-            ImGui::Text("Draw calls: %d", 1);
-            ImGui::Text("Chunks loaded: %d", 0);
-        }
+        ImGui::ColorEdit4("Top Color", &pushConstants.data1.x);
+        ImGui::ColorEdit4("Bottom Color", &pushConstants.data2.x);
     }
     ImGui::End();
     ImGui::Render();
@@ -496,6 +471,11 @@ void VulkanContext::draw_background(VkCommandBuffer cmd) {
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipelineLayout,
         0, 1, &drawImageDescriptors, 0, nullptr);
 
+    vkCmdPushConstants(cmd, gradientPipelineLayout,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        0, sizeof(ComputePushConstants),
+        &pushConstants);
+
     vkCmdDispatch(cmd,
         static_cast<uint32_t>(std::ceil(drawImage.imageExtent.width / 16.0)),
         static_cast<uint32_t>(std::ceil(drawImage.imageExtent.height / 16.0)),
@@ -539,15 +519,23 @@ void VulkanContext::init_pipelines() {
 }
 
 void VulkanContext::init_background_pipelines() {
+
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(ComputePushConstants);
+
     VkPipelineLayoutCreateInfo computeLayout{};
     computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     computeLayout.pSetLayouts = &drawImageDescriptorLayout;
     computeLayout.setLayoutCount = 1;
+    computeLayout.pPushConstantRanges = &pushConstantRange;   
+    computeLayout.pushConstantRangeCount = 1;                  
 
     VK_CHECK(vkCreatePipelineLayout(device, &computeLayout, nullptr, &gradientPipelineLayout));
 
     VkShaderModule computeDrawShader;
-    if (!vkutil::load_shader_module("shaders/gradient.comp.spv", device, &computeDrawShader)) {
+    if (!vkutil::load_shader_module("shaders/gradient_color.comp.spv", device, &computeDrawShader)) {
         throw std::runtime_error("Failed to load compute shader");
     }
 
