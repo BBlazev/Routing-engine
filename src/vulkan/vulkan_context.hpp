@@ -11,6 +11,10 @@
 #include <vulkan/vk_descriptors.hpp>
 #include <vulkan/vk_pipelines.hpp>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+
 struct AllocatedImage{
     VkImage image;
     VkImageView imageView;
@@ -76,13 +80,20 @@ class VulkanContext{
         std::vector<VkImageView> swapchainImageViews;
         VkExtent2D swapchainExtent;
 
+        VkFence immFence = VK_NULL_HANDLE;
+        VkCommandBuffer immCommandBuffer = VK_NULL_HANDLE;
+        VkCommandPool immCommandPool = VK_NULL_HANDLE;
+
+        void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+
+
         [[nodiscard]] VkDevice get_device() const { return device; }
         [[nodiscard]] VkQueue get_graphics_queue() const { return graphics_queue; }
         [[nodiscard]] uint32_t get_graphics_queue_family() const { return graphics_queue_family; }
 
         void draw();
         void draw_background(VkCommandBuffer cmd);
-        
+    
     private:
         vkb::Instance  vkb_instance;
         vkb::Device    vkb_device;
@@ -96,6 +107,7 @@ class VulkanContext{
         VmaAllocator allocator;
         AllocatedImage drawImage;
         VkExtent2D drawExtent;
+        GLFWwindow* glfwWindow = nullptr;
         
         void init_vulkan();
         void init_swapchain();
@@ -104,6 +116,7 @@ class VulkanContext{
         void init_descriptors();
         void init_pipelines();
         void init_background_pipelines();
+        void init_imgui();
 
         int frameNumber = 0;
 

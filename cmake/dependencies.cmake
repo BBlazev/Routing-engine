@@ -26,6 +26,31 @@ FetchContent_Declare(
     GIT_TAG        v3.2.1
     GIT_SHALLOW    ON
 )
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui
+    GIT_TAG        v1.91.8
+    GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(imgui)
+
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+)
+
+target_include_directories(imgui PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+
+target_link_libraries(imgui PUBLIC Vulkan::Vulkan glfw)
+target_compile_options(imgui PRIVATE -w)
 FetchContent_MakeAvailable(vma)
 FetchContent_MakeAvailable(vk-bootstrap)
 
