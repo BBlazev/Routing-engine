@@ -9,7 +9,7 @@
 
 #include <vk_mem_alloc.h>
 #include <vulkan/vk_descriptors.hpp>
-#include <vulkan/vk_pipelines.hpp>
+#include <rendering/vk_pipelines.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -101,6 +101,7 @@ class VulkanContext{
         
         void draw();
         void draw_background(VkCommandBuffer cmd);
+        void draw_geometry(VkCommandBuffer cmd);
         void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
     
     private:
@@ -117,6 +118,9 @@ class VulkanContext{
         AllocatedImage drawImage;
         VkExtent2D drawExtent;
         GLFWwindow* glfwWindow = nullptr;
+        VkPipelineLayout trianglePipelineLayout;
+        VkPipeline trianglePipeline;
+
 
         void init_vulkan();
         void init_swapchain();
@@ -126,12 +130,13 @@ class VulkanContext{
         void init_pipelines();
         void init_background_pipelines();
         void init_imgui();
+        void init_triangle_pipeline();
 
         int frameNumber = 0;
 
         void create_swapchain(uint32_t width, uint32_t height);
         void destroy_swapchain();
-
+        bool load_shader_module(const char* filePath, VkDevice device, VkShaderModule* outShaderModule);
         VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
         VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
         VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags =0);

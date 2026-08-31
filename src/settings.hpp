@@ -3,7 +3,7 @@
 
 
 constexpr int SCREEN_WIDTH = 1600;
-constexpr int SCREEN_HEIGHT = 800;
+constexpr int SCREEN_HEIGHT = 1200;
 
 
 #endif
