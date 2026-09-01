@@ -1,18 +1,44 @@
 include(FetchContent)
 
 # -------------------------------------------------------
-# System packages (installed via dnf)
+# Vulkan — must be installed (SDK on Windows, dnf on Linux)
 # -------------------------------------------------------
 find_package(Vulkan REQUIRED)
-find_package(glfw3 REQUIRED)
-find_package(glm REQUIRED)
 find_package(Threads REQUIRED)
 
 # -------------------------------------------------------
-# vk-bootstrap — fetched from GitHub
-# Handles Vulkan instance/device creation boilerplate.
-# You'll use this in Phase 1 instead of writing 400 lines
-# of VkInstanceCreateInfo / VkDeviceCreateInfo.
+# GLFW — system if available, otherwise fetch
+# -------------------------------------------------------
+find_package(glfw3 QUIET)
+if(NOT glfw3_FOUND)
+    FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw
+        GIT_TAG        3.4
+        GIT_SHALLOW    ON
+    )
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(glfw)
+endif()
+
+# -------------------------------------------------------
+# GLM — system if available, otherwise fetch
+# -------------------------------------------------------
+find_package(glm QUIET)
+if(NOT glm_FOUND)
+    FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm
+        GIT_TAG        1.0.1
+        GIT_SHALLOW    ON
+    )
+    FetchContent_MakeAvailable(glm)
+endif()
+
+# -------------------------------------------------------
+# vk-bootstrap
 # -------------------------------------------------------
 FetchContent_Declare(
     vk-bootstrap
@@ -20,12 +46,22 @@ FetchContent_Declare(
     GIT_TAG        v1.3.296
     GIT_SHALLOW    ON
 )
+FetchContent_MakeAvailable(vk-bootstrap)
+
+# -------------------------------------------------------
+# VMA
+# -------------------------------------------------------
 FetchContent_Declare(
     vma
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
     GIT_TAG        v3.2.1
     GIT_SHALLOW    ON
 )
+FetchContent_MakeAvailable(vma)
+
+# -------------------------------------------------------
+# ImGui
+# -------------------------------------------------------
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui
@@ -50,11 +86,13 @@ target_include_directories(imgui PUBLIC
 )
 
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan glfw)
-target_compile_options(imgui PRIVATE -w)
-FetchContent_MakeAvailable(vma)
-FetchContent_MakeAvailable(vk-bootstrap)
+
+# -------------------------------------------------------
+# Suppress warnings from dependencies
+# -------------------------------------------------------
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(imgui PRIVATE -w)
+endif()
 
 message(STATUS "Vulkan found:       ${Vulkan_INCLUDE_DIRS}")
-message(STATUS "GLFW found:         ${glfw3_DIR}")
-message(STATUS "GLM found:          ${glm_DIR}")
 message(STATUS "vk-bootstrap:       fetched via FetchContent")

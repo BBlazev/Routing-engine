@@ -12,18 +12,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)     
 
 
-add_compile_options(
-    -Wall -Wextra -Wpedantic
-    -Wconversion -Wshadow -Wnon-virtual-dtor
-    -Wold-style-cast -Wcast-align -Wunused
-    -Woverloaded-virtual -Wmisleading-indentation
-    -Wnull-dereference -Wdouble-promotion
-    -Wformat=2 -Wimplicit-fallthrough
-)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
-    add_link_options(-fsanitize=address,undefined)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(
+        -Wall -Wextra -Wpedantic
+        -Wconversion -Wshadow -Wnon-virtual-dtor
+        -Wold-style-cast -Wcast-align -Wunused
+        -Woverloaded-virtual -Wmisleading-indentation
+        -Wnull-dereference -Wdouble-promotion
+        -Wformat=2 -Wimplicit-fallthrough
+    )
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address,undefined)
+    endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    add_compile_options(/W4 /permissive-)
 endif()
 
 
@@ -61,8 +65,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 
-find_program(GLSLC glslc REQUIRED)
-
+find_program(GLSLC glslc
+    HINTS
+        $ENV{VULKAN_SDK}/Bin
+        ${VULKAN_SDK}/Bin
+    REQUIRED
+)
 file(GLOB_RECURSE SHADER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.vert"
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.frag"

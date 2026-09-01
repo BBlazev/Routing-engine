@@ -9,6 +9,7 @@
 
 #include <vk_mem_alloc.h>
 #include <vulkan/vk_descriptors.hpp>
+#include <vulkan/vk_types.hpp>
 #include <rendering/vk_pipelines.hpp>
 
 #include <imgui.h>
@@ -16,46 +17,9 @@
 #include <imgui_impl_vulkan.h>
 
 #include <glm/glm.hpp>
-
-struct AllocatedImage{
-    VkImage image;
-    VkImageView imageView;
-    VmaAllocation allocation;
-    VkExtent3D imageExtent;
-    VkFormat imageFormat;
-};
-
-struct ComputePushConstants {
-    glm::vec4 data1;
-    glm::vec4 data2;
-    glm::vec4 data3;
-    glm::vec4 data4;
-};
-
-struct DeletionQueue
-{
-    std::deque<std::function<void()>> deletors;
-    void push_function(std::function<void()>&& function){
-        deletors.push_back(function);
-    }
-
-    void flush(){
-        for(auto it = deletors.rbegin(); it != deletors.rend(); it++){
-            (*it)();
-        }
-        deletors.clear();
-    }
-};
+#include <span>
 
 
-struct FrameData {
-    VkCommandPool commandPool = VK_NULL_HANDLE;
-    VkCommandBuffer mainCommandBuffer = VK_NULL_HANDLE;
-    VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
-    VkSemaphore renderSemaphore = VK_NULL_HANDLE;
-    VkFence renderFence = VK_NULL_HANDLE;
-    DeletionQueue deletionQueue;
-};
 
 constexpr unsigned int FRAME_OVERLAP = 4;
 
@@ -118,8 +82,13 @@ class VulkanContext{
         AllocatedImage drawImage;
         VkExtent2D drawExtent;
         GLFWwindow* glfwWindow = nullptr;
+        
         VkPipelineLayout trianglePipelineLayout;
         VkPipeline trianglePipeline;
+        
+        VkPipelineLayout meshPipelineLayout;
+        VkPipeline meshPipeline;
+        GPUMeshBuffers rectangle;
 
 
         void init_vulkan();
@@ -131,12 +100,16 @@ class VulkanContext{
         void init_background_pipelines();
         void init_imgui();
         void init_triangle_pipeline();
+        void init_mesh_pipeline();
+        void init_default_data();
 
         int frameNumber = 0;
 
         void create_swapchain(uint32_t width, uint32_t height);
         void destroy_swapchain();
+        void destroy_buffer(const AllocatedBuffer& buffer);
         bool load_shader_module(const char* filePath, VkDevice device, VkShaderModule* outShaderModule);
+
         VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
         VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
         VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags =0);
@@ -145,9 +118,8 @@ class VulkanContext{
         VkSubmitInfo2 submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signalSemaphoreInfo, VkSemaphoreSubmitInfo* waitSemaphoreInfo);
         VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent);
         VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
-
-
-
+        AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+        GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
 };
 
