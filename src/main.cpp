@@ -18,6 +18,10 @@ int main() {
         while (!window.should_close()) {
             glfwPollEvents();
 
+            if (vk.resize_requested) {
+                vk.resize_swapchain();
+            }
+
             if (glfwGetKey(window.get_window(), GLFW_KEY_ESCAPE) == GLFW_PRESS) {
                 glfwSetWindowShouldClose(window.get_window(), GLFW_TRUE);
             }

@@ -55,6 +55,9 @@ VkRenderingInfo rendering_info(VkExtent2D renderExtent, VkRenderingAttachmentInf
 
 
 void VulkanContext::init_vulkan() {
+
+
+
     init_swapchain();
     init_commands();
     init_sync_structures();
@@ -66,6 +69,8 @@ void VulkanContext::init_vulkan() {
 
 
 VulkanContext::VulkanContext(GLFWwindow* window){
+
+
 
     glfwWindow = window;
     auto instance_result = vkb::InstanceBuilder{}
@@ -90,6 +95,11 @@ VulkanContext::VulkanContext(GLFWwindow* window){
         throw std::runtime_error("Failed to create window surface");
     }
 
+    //glfwSetWindowUserPointer(glfwWindow, this);
+    //glfwSetFramebufferSizeCallback(glfwWindow, [](GLFWwindow* window, int width, int height) {
+    //    auto engine = reinterpret_cast<VulkanContext*>(glfwGetWindowUserPointer(window));
+    //    engine->resize_requested = true;
+    //});
 
     auto phys_result = vkb::PhysicalDeviceSelector{vkb_instance}
         .set_minimum_version(1, 3)
@@ -557,9 +567,13 @@ void VulkanContext::init_sync_structures(){
 }
 void VulkanContext::draw() {
 
+    //VK_CHECK(vkWaitForFences(device, 1, &get_current_frame().renderFence, true, 1000000000));
+    //get_current_frame().deletionQueue.flush();
+    //VK_CHECK(vkResetFences(device, 1, &get_current_frame().renderFence));
+
     VK_CHECK(vkWaitForFences(device, 1, &get_current_frame().renderFence, true, 1000000000));
     get_current_frame().deletionQueue.flush();
-    VK_CHECK(vkResetFences(device, 1, &get_current_frame().renderFence));
+
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -587,12 +601,33 @@ void VulkanContext::draw() {
         io.DisplaySize.x, io.DisplaySize.y,
         io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
+    //uint32_t swapchainImageIndex;
+    //VK_CHECK(vkAcquireNextImageKHR(device, swapchain, 1000000000,
+    //                               get_current_frame().swapchainSemaphore, VK_NULL_HANDLE,
+    //                               &swapchainImageIndex));
+
+    //VkCommandBuffer cmd = get_current_frame().mainCommandBuffer;
+
     uint32_t swapchainImageIndex;
-    VK_CHECK(vkAcquireNextImageKHR(device, swapchain, 1000000000,
-                                   get_current_frame().swapchainSemaphore, VK_NULL_HANDLE,
-                                   &swapchainImageIndex));
+
+    VkResult acquireResult =
+        vkAcquireNextImageKHR(device, swapchain, 1000000000, get_current_frame().swapchainSemaphore,
+                              VK_NULL_HANDLE, &swapchainImageIndex);
+
+    if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
+        resize_requested = true;
+        return;
+    }
+
+    if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR) {
+        VK_CHECK(acquireResult);
+    }
+
+    VK_CHECK(vkResetFences(device, 1, &get_current_frame().renderFence));
 
     VkCommandBuffer cmd = get_current_frame().mainCommandBuffer;
+
+
     VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
     VkCommandBufferBeginInfo cmdBeginInfo = command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -610,7 +645,8 @@ void VulkanContext::draw() {
     draw_geometry(cmd);
 
 
-    transition_image(cmd, drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    //transition_image(cmd, drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    transition_image(cmd, drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     transition_image(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     copy_image_to_image(cmd, drawImage.image, swapchainImages[swapchainImageIndex], drawImage.imageExtent, swapchainExtent);
 
@@ -653,7 +689,17 @@ void VulkanContext::draw() {
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pImageIndices = &swapchainImageIndex;
 
-    VK_CHECK(vkQueuePresentKHR(graphics_queue, &presentInfo));
+    //VK_CHECK(vkQueuePresentKHR(graphics_queue, &presentInfo));
+    //frameNumber++;
+
+    VkResult presentResult = vkQueuePresentKHR(graphics_queue, &presentInfo);
+
+    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
+        resize_requested = true;
+    } else if (presentResult != VK_SUCCESS) {
+        VK_CHECK(presentResult);
+    }
+
     frameNumber++;
 }
 
@@ -867,6 +913,33 @@ bool VulkanContext::load_shader_module(const char* filePath, VkDevice device, Vk
     return true;
 }
 
+void VulkanContext::resize_swapchain() {
+
+    vkDeviceWaitIdle(device);
+    int width = 0;
+    int height = 0;
+
+    glfwGetFramebufferSize(glfwWindow, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwWaitEvents();
+        glfwGetFramebufferSize(glfwWindow, &width, &height);
+    }
+
+    destroy_swapchain();
+    windowExtent.width = width;
+    windowExtent.height = height;
+
+    create_swapchain(windowExtent.width, windowExtent.height);
+    resize_requested = false;
+
+}
+
+void VulkanContext::framebuffer_resize_callback(GLFWwindow* window, int width, int height) {
+
+    auto engine = reinterpret_cast<VulkanContext*>(glfwGetWindowUserPointer(window));
+    engine->resize_requested = true;
+}
+
 void VulkanContext::init_mesh_pipeline() {
     VkShaderModule fragmentShader;
     if (!load_shader_module("shaders/colored_triangle.frag.spv", device, &fragmentShader))
@@ -898,8 +971,9 @@ void VulkanContext::init_mesh_pipeline() {
     pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
     pipelineBuilder.set_multisampling_none();
-    pipelineBuilder.disable_blending();
+    //pipelineBuilder.disable_blending();
     //pipelineBuilder.disable_depthtest();
+    pipelineBuilder.enable_blending_additive();
     pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
     pipelineBuilder.set_color_attachment_format(drawImage.imageFormat);
     pipelineBuilder.set_depth_format(VK_FORMAT_UNDEFINED);

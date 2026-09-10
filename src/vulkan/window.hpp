@@ -4,6 +4,7 @@
 
 #include <GLFW/glfw3.h>
 #include <settings.hpp>
+#include <vulkan/vulkan_context.hpp>
 
 class Window{
     public:

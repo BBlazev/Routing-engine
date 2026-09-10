@@ -38,6 +38,7 @@ class VulkanContext{
         FrameData frames[FRAME_OVERLAP];
         FrameData& get_current_frame() {return frames[frameNumber % FRAME_OVERLAP];};
 
+        
         VkExtent2D windowExtent{1600, 1200};
 
         VkSwapchainKHR swapchain;
@@ -74,6 +75,9 @@ class VulkanContext{
 
 
         std::vector<std::shared_ptr<MeshAsset>> testMeshes;
+        bool resize_requested{false};
+        void resize_swapchain();
+        static void framebuffer_resize_callback(GLFWwindow* window, int width, int height);
 
     private:
         vkb::Instance  vkb_instance;
@@ -115,6 +119,7 @@ class VulkanContext{
         void init_imgui();
         void init_mesh_pipeline();
         void init_default_data();
+
 
         int frameNumber = 0;
 
