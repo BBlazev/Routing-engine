@@ -47,8 +47,9 @@ add_executable(${PROJECT_NAME}
     src/vulkan/vma_impl.cpp
     src/vulkan/vk_descriptors.cpp
     src/rendering/vk_pipelines.cpp
+    src/rendering/vk_loader.cpp
     
-)
+ "src/rendering/vk_loader.cpp")
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -62,6 +63,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     GPUOpen::VulkanMemoryAllocator
     Threads::Threads
     imgui
+    stb_image
+    fastgltf
 )
 
 

@@ -10,6 +10,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vk_descriptors.hpp>
 #include <vulkan/vk_types.hpp>
+#include <rendering/vk_loader.hpp>
 #include <rendering/vk_pipelines.hpp>
 
 #include <imgui.h>
@@ -37,6 +38,7 @@ class VulkanContext{
         FrameData frames[FRAME_OVERLAP];
         FrameData& get_current_frame() {return frames[frameNumber % FRAME_OVERLAP];};
 
+        VkExtent2D windowExtent{1600, 1200};
 
         VkSwapchainKHR swapchain;
         VkFormat swapchainImageFormat;
@@ -68,6 +70,11 @@ class VulkanContext{
         void draw_geometry(VkCommandBuffer cmd);
         void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
     
+        GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
+
+        std::vector<std::shared_ptr<MeshAsset>> testMeshes;
+
     private:
         vkb::Instance  vkb_instance;
         vkb::Device    vkb_device;
@@ -80,6 +87,7 @@ class VulkanContext{
         DeletionQueue  mainDeletionQueue;
         VmaAllocator allocator;
         AllocatedImage drawImage;
+        AllocatedImage depthImage;
         VkExtent2D drawExtent;
         GLFWwindow* glfwWindow = nullptr;
         
@@ -90,6 +98,12 @@ class VulkanContext{
         VkPipeline meshPipeline;
         GPUMeshBuffers rectangle;
 
+        //animation
+        glm::vec4 colorA{1.0f, 0.0f, 0.0f, 1.0f};
+        glm::vec4 colorB{0.0f, 0.0f, 1.0f, 1.0f};
+        bool animate = true;
+        float animSpeed = 0.5f;
+
 
         void init_vulkan();
         void init_swapchain();
@@ -99,7 +113,6 @@ class VulkanContext{
         void init_pipelines();
         void init_background_pipelines();
         void init_imgui();
-        void init_triangle_pipeline();
         void init_mesh_pipeline();
         void init_default_data();
 
@@ -119,8 +132,7 @@ class VulkanContext{
         VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent);
         VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
         AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-        GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
-
+        VkRenderingAttachmentInfo depth_attachment_info(VkImageView view, VkImageLayout layout);
 };
 
 

@@ -1,14 +1,10 @@
 include(FetchContent)
 
-# -------------------------------------------------------
-# Vulkan — must be installed (SDK on Windows, dnf on Linux)
-# -------------------------------------------------------
+
 find_package(Vulkan REQUIRED)
 find_package(Threads REQUIRED)
 
-# -------------------------------------------------------
-# GLFW — system if available, otherwise fetch
-# -------------------------------------------------------
+
 find_package(glfw3 QUIET)
 if(NOT glfw3_FOUND)
     FetchContent_Declare(
@@ -23,9 +19,7 @@ if(NOT glfw3_FOUND)
     FetchContent_MakeAvailable(glfw)
 endif()
 
-# -------------------------------------------------------
-# GLM — system if available, otherwise fetch
-# -------------------------------------------------------
+
 find_package(glm QUIET)
 if(NOT glm_FOUND)
     FetchContent_Declare(
@@ -37,9 +31,6 @@ if(NOT glm_FOUND)
     FetchContent_MakeAvailable(glm)
 endif()
 
-# -------------------------------------------------------
-# vk-bootstrap
-# -------------------------------------------------------
 FetchContent_Declare(
     vk-bootstrap
     GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap
@@ -48,9 +39,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vk-bootstrap)
 
-# -------------------------------------------------------
-# VMA
-# -------------------------------------------------------
 FetchContent_Declare(
     vma
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
@@ -59,9 +47,28 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vma)
 
-# -------------------------------------------------------
-# ImGui
-# -------------------------------------------------------
+
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb
+    GIT_TAG        master
+    GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(stb)
+add_library(stb_image INTERFACE)
+target_include_directories(stb_image INTERFACE ${stb_SOURCE_DIR})
+
+
+FetchContent_Declare(
+    fastgltf
+    GIT_REPOSITORY https://github.com/spnda/fastgltf
+    GIT_TAG        v0.8.0
+    GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(fastgltf)
+
+
+
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui
@@ -87,9 +94,6 @@ target_include_directories(imgui PUBLIC
 
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan glfw)
 
-# -------------------------------------------------------
-# Suppress warnings from dependencies
-# -------------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(imgui PRIVATE -w)
 endif()

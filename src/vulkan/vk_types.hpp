@@ -2,6 +2,7 @@
 #define VK_TYPES_HPP
 
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 #include <functional>
 #include <glm/glm.hpp>
 #include <vector>
