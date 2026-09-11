@@ -21,8 +21,20 @@
 #include <span>
 
 
+struct FrameData {
+	VkCommandPool commandPool = VK_NULL_HANDLE;
+	VkCommandBuffer mainCommandBuffer = VK_NULL_HANDLE;
+	VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
+	VkSemaphore renderSemaphore = VK_NULL_HANDLE;
+	VkFence renderFence = VK_NULL_HANDLE;
+	DeletionQueue deletionQueue;
+	DescriptorAllocatorGrowable frameDescriptors;
+};
 
 constexpr unsigned int FRAME_OVERLAP = 4;
+
+
+
 
 class VulkanContext{
     public:
@@ -101,6 +113,9 @@ class VulkanContext{
         VkPipelineLayout meshPipelineLayout;
         VkPipeline meshPipeline;
         GPUMeshBuffers rectangle;
+
+		GPUSceneData sceneData;
+		VkDescriptorSetLayout gpuSceneDataDescriptorLayout;
 
         //animation
         glm::vec4 colorA{1.0f, 0.0f, 0.0f, 1.0f};

@@ -41,14 +41,7 @@ struct DeletionQueue {
     }
 };
 
-struct FrameData {
-    VkCommandPool commandPool = VK_NULL_HANDLE;
-    VkCommandBuffer mainCommandBuffer = VK_NULL_HANDLE;
-    VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
-    VkSemaphore renderSemaphore = VK_NULL_HANDLE;
-    VkFence renderFence = VK_NULL_HANDLE;
-    DeletionQueue deletionQueue;
-};
+
 
 struct Vertex {
     glm::vec3 position;
@@ -67,6 +60,15 @@ struct GPUMeshBuffers {
 struct GPUDrawPushConstants {
     glm::mat4 worldMatrix;
     VkDeviceAddress vertexBuffer;
+};
+
+struct GPUSceneData {
+	glm::mat4 view;
+	glm::mat4 proj;
+	glm::mat4 viewproj;
+	glm::vec4 ambientColor;
+	glm::vec4 sunlightDirection;
+	glm::vec4 sunlightColor;
 };
 
 #endif // !VK_TYPES_HPP
