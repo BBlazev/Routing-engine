@@ -116,6 +116,8 @@ void VulkanDevice::create_logical_device() {
 
 	graphicsQueue_ = queueResult.value();
 	graphicsQueueFamily_ = vkbDevice_.get_queue_index(vkb::QueueType::graphics).value();
+
+	load_debug_utils();
 }
 
 void VulkanDevice::create_allocator() {
@@ -139,6 +141,48 @@ void VulkanDevice::create_immediate_context() {
 
 	VkFenceCreateInfo fenceInfo = vkinit::fence_create_info();
 	VK_CHECK(vkCreateFence(device_, &fenceInfo, nullptr, &immFence_));
+}
+
+void VulkanDevice::load_debug_utils(){
+
+	vkSetDebugUtilsObjectNameEXT_ = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+									vkGetInstanceProcAddr(instance_, "vkSetDebugUtilsObjectNameEXT"));
+
+	vkCmdBeginDebugUtilsLabelEXT_ = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+									vkGetInstanceProcAddr(instance_, "vkCmdBeginDebugUtilsLabelEXT"));
+
+	vkCmdEndDebugUtilsLabelEXT_ = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
+									vkGetInstanceProcAddr(instance_, "vkCmdEndDebugUtilsLabelEXT"));
+}
+
+void VulkanDevice::set_debug_name(uint64_t handle,VkObjectType type, const char* name){
+	
+	if(vkSetDebugUtilsObjectNameEXT_ == nullptr) return;
+
+	VkDebugUtilsObjectNameInfoEXT info{};
+	info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+	info.objectType = type;
+	info.objectHandle = handle;
+	info.pObjectName = name;
+
+	vkSetDebugUtilsObjectNameEXT_(device_, &info);
+}
+
+void VulkanDevice::begin_label(VkCommandBuffer cmd, const char* name) {
+
+	if (vkCmdBeginDebugUtilsLabelEXT_ == nullptr) return;
+
+	VkDebugUtilsLabelEXT label{};
+	label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+	label.pLabelName = name;
+
+	vkCmdBeginDebugUtilsLabelEXT_(cmd, &label);
+}
+
+void VulkanDevice::end_label(VkCommandBuffer cmd) {
+
+	if (vkCmdEndDebugUtilsLabelEXT_ == nullptr) return;
+	vkCmdEndDebugUtilsLabelEXT_(cmd);
 }
 
 void VulkanDevice::wait_idle() const {
@@ -189,7 +233,7 @@ void VulkanDevice::destroy_buffer(const AllocatedBuffer& buffer) {
 	vmaDestroyBuffer(allocator_, buffer.buffer, buffer.allocation);
 }
 
-AllocatedImage VulkanDevice::create_image(VkExtent3D size, VkFormat format,	VkImageUsageFlags usage, bool mipmapped) {
+AllocatedImage VulkanDevice::create_image(VkExtent3D size, VkFormat format,	VkImageUsageFlags usage, bool mipmapped, const char* debugName) {
 	
 	AllocatedImage newImage{};
 	newImage.imageFormat = format;
@@ -215,11 +259,17 @@ AllocatedImage VulkanDevice::create_image(VkExtent3D size, VkFormat format,	VkIm
 
 	VK_CHECK(vkCreateImageView(device_, &viewInfo, nullptr, &newImage.imageView));
 
+	if(debugName != nullptr){
+	
+		set_debug_name(reinterpret_cast<uint64_t>(newImage.image), VK_OBJECT_TYPE_IMAGE, debugName);
+		set_debug_name(reinterpret_cast<uint64_t>(newImage.imageView), VK_OBJECT_TYPE_IMAGE_VIEW, debugName);
+	}
+
 	return newImage;
 }
 
-AllocatedImage VulkanDevice::create_image(const void* data, VkExtent3D size,
-									VkFormat format, VkImageUsageFlags usage, bool mipmapped) {
+AllocatedImage VulkanDevice::create_image(const void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped,
+							const char* debugName) {
 
 	const size_t dataSize = static_cast<size_t>(size.depth) * size.width * size.height * 4;
 
@@ -230,7 +280,7 @@ AllocatedImage VulkanDevice::create_image(const void* data, VkExtent3D size,
 	AllocatedImage newImage = create_image(
 								size, format,
 								usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-								mipmapped);
+								mipmapped, debugName);
 
 	immediate_submit([&](VkCommandBuffer cmd) {
 		

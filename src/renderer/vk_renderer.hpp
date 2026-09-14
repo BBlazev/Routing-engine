@@ -58,6 +58,8 @@ private:
 	void init_mesh_pipeline();
 	void init_imgui();
 	void init_default_data();
+	void init_default_samplers();
+	void init_default_textures();
 
 	FrameData& current_frame() { return frames_[frameNumber_ % settings::FRAME_OVERLAP]; }
 
@@ -79,6 +81,11 @@ private:
 
 	AllocatedImage drawImage_{};
 	AllocatedImage depthImage_{};
+	AllocatedImage whiteImage_{};
+	AllocatedImage greyImage_{};
+	AllocatedImage blackImage_{};
+	AllocatedImage errorCheckerboardImage_{};
+
 	VkExtent2D     drawExtent_{};
 
 	DescriptorAllocatorGrowable globalDescriptorAllocator_;
@@ -96,6 +103,9 @@ private:
 
 	Camera camera_;
 	GPUSceneData sceneData_{};
+
+	VkSampler defaultSamplerLinear_ = VK_NULL_HANDLE;
+	VkSampler defaultSamplerNearest_ = VK_NULL_HANDLE;
 
 	std::vector<std::shared_ptr<MeshAsset>> meshes_;
 	int selectedMesh_ = 2;

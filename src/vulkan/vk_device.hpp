@@ -37,12 +37,19 @@ public:
 	AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	void destroy_buffer(const AllocatedBuffer& buffer);
 
-	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-	AllocatedImage create_image(const void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false,
+								const char* debugName = nullptr);
+	AllocatedImage create_image(const void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false,
+								const char* debugName = nullptr);
 	void destroy_image(const AllocatedImage& img);
 
 	GPUMeshBuffers upload_mesh(std::span<const uint32_t> indices,std::span<const Vertex> vertices);
 	void destroy_mesh(const GPUMeshBuffers& mesh);
+
+	//debugs
+	void set_debug_name(uint64_t handle, VkObjectType type, const char* name);
+	void begin_label(VkCommandBuffer cmd, const char* name);
+	void end_label(VkCommandBuffer cmd);
 
 private:
 
@@ -65,6 +72,14 @@ private:
 	VkFence         immFence_ = VK_NULL_HANDLE;
 	VkCommandPool   immCommandPool_ = VK_NULL_HANDLE;
 	VkCommandBuffer immCommandBuffer_ = VK_NULL_HANDLE;
+
+	//debugs
+	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT_ = nullptr;
+	PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT_ = nullptr;
+	PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT_ = nullptr;
+	void load_debug_utils();
+
+
 };
 
 #endif // VK_DEVICE_HPP

@@ -39,6 +39,8 @@ Renderer::Renderer(Window& window, VulkanDevice& device) : window_(window), devi
 		init_descriptors();
 		init_pipelines();
 		init_imgui();
+		init_default_samplers();
+		init_default_textures();
 		init_default_data();
 	}
 	catch (...) {
@@ -96,9 +98,9 @@ void Renderer::init_render_targets() {
 		VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-	drawImage_ = device_.create_image(drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT,drawImageUsages);
+	drawImage_ = device_.create_image(drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT,drawImageUsages, "drawImage");
 
-	depthImage_ = device_.create_image(drawImageExtent, VK_FORMAT_D32_SFLOAT,VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	depthImage_ = device_.create_image(drawImageExtent, VK_FORMAT_D32_SFLOAT,VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, "depthImage");
 
 	mainDeletionQueue_.push_function([this]() {
 		device_.destroy_image(drawImage_);
@@ -451,23 +453,28 @@ void Renderer::draw() {
 
 	drawExtent_.width = std::min(swapchain_.extent().width, drawImage_.imageExtent.width);
 	drawExtent_.height = std::min(swapchain_.extent().height, drawImage_.imageExtent.height);
+	
+	device_.begin_label(cmd, "Background");
+		vkutil::transition_image(cmd, drawImage_.image, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+		draw_background(cmd);
+	device_.end_label(cmd);
 
-	vkutil::transition_image(cmd, drawImage_.image, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
-	draw_background(cmd);
+	device_.begin_label(cmd, "Geometry");
+		vkutil::transition_image(cmd, drawImage_.image, VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		vkutil::transition_image(cmd, depthImage_.image, VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		draw_geometry(cmd);
+	device_.end_label(cmd);
 
-	vkutil::transition_image(cmd, drawImage_.image, VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transition_image(cmd, depthImage_.image, VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	device_.begin_label(cmd, "Blit to swapchain");
+		vkutil::transition_image(cmd, drawImage_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		vkutil::transition_image(cmd, swapchain_.image(swapchainImageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		vkutil::copy_image_to_image(cmd, drawImage_.image,swapchain_.image(swapchainImageIndex), drawExtent_, swapchain_.extent());
+		vkutil::transition_image(cmd, swapchain_.image(swapchainImageIndex), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	device_.end_label(cmd);
 
-	draw_geometry(cmd);
-
-	vkutil::transition_image(cmd, drawImage_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transition_image(cmd, swapchain_.image(swapchainImageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	vkutil::copy_image_to_image(cmd, drawImage_.image,swapchain_.image(swapchainImageIndex), drawExtent_, swapchain_.extent());
-
-	vkutil::transition_image(cmd, swapchain_.image(swapchainImageIndex), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	draw_imgui(cmd, swapchain_.view(swapchainImageIndex));
+	device_.begin_label(cmd, "UI");
+		draw_imgui(cmd, swapchain_.view(swapchainImageIndex));
+	device_.end_label(cmd);
 
 	vkutil::transition_image(cmd, swapchain_.image(swapchainImageIndex), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
@@ -601,4 +608,54 @@ void Renderer::draw_imgui(VkCommandBuffer cmd, VkImageView targetView) {
 	vkCmdBeginRendering(cmd, &renderInfo);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 	vkCmdEndRendering(cmd);
+}
+
+void Renderer::init_default_samplers(){
+	
+	VkSamplerCreateInfo sampler{};
+	sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	sampler.magFilter = VK_FILTER_NEAREST;
+	sampler.minFilter = VK_FILTER_NEAREST;
+	VK_CHECK(vkCreateSampler(device_.device(), &sampler, nullptr, &defaultSamplerNearest_));
+
+	sampler.magFilter = VK_FILTER_LINEAR;
+	sampler.minFilter = VK_FILTER_LINEAR;
+
+	VK_CHECK(vkCreateSampler(device_.device(), &sampler, nullptr, &defaultSamplerLinear_));
+
+	mainDeletionQueue_.push_function([this](){
+		vkDestroySampler(device_.device(), defaultSamplerLinear_, nullptr);
+		vkDestroySampler(device_.device(), defaultSamplerNearest_, nullptr);
+	});
+
+}
+
+void Renderer::init_default_textures(){
+
+	const uint32_t white = 0xFFFFFFFF;
+	const uint32_t grey = 0xFFAAAAAA;
+	const uint32_t black = 0xFF000000;
+
+	const VkExtent3D onePixel{1,1,1};
+
+	whiteImage_ = device_.create_image(&white, onePixel, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, "whiteImage");
+	greyImage_  = device_.create_image(&grey, onePixel, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, "greyImage");
+	blackImage_ = device_.create_image(&black, onePixel, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, "blackImage");
+
+	const uint32_t magenta = 0xFFFF00FF;
+	std::array<uint32_t, 16 * 16> pixels{};
+	for (int y = 0; y < 16; ++y) {
+		for (int x = 0; x < 16; ++x) {
+			pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+		}
+	}
+
+	errorCheckerboardImage_ = device_.create_image(pixels.data(), VkExtent3D{16,16,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, "errorImage");
+
+	mainDeletionQueue_.push_function([this](){
+		device_.destroy_image(whiteImage_);
+		device_.destroy_image(greyImage_);
+		device_.destroy_image(blackImage_);
+		device_.destroy_image(errorCheckerboardImage_);
+	});
 }
