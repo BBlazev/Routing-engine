@@ -42,14 +42,17 @@ include(cmake/dependencies.cmake)
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
-    src/vulkan/window.cpp
-    src/vulkan/vulkan_context.cpp
+    src/platform/window.cpp
+    src/vulkan/vk_device.cpp
     src/vulkan/vma_impl.cpp
     src/vulkan/vk_descriptors.cpp
-    src/rendering/vk_pipelines.cpp
-    src/rendering/vk_loader.cpp
+	src/vulkan/vk_swapchain.cpp
+    src/renderer/vk_pipelines.cpp
+    src/renderer/vk_loader.cpp
+	src/renderer/camera.cpp
+	src/renderer/vk_renderer.cpp
+)
     
- "src/rendering/vk_loader.cpp")
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -67,6 +70,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     fastgltf
 )
 
+target_compile_definitions(vulkan-streaming PRIVATE
+    GLM_FORCE_DEPTH_ZERO_TO_ONE
+    GLM_FORCE_RADIANS
+    GLM_ENABLE_EXPERIMENTAL
+)
 
 find_program(GLSLC glslc
     HINTS

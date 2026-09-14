@@ -1,40 +1,51 @@
+#include <core/paths.hpp>
+#include <core/settings.hpp>
+#include <platform/window.hpp>
+#include <renderer/vk_renderer.hpp>
+#include <vulkan/vk_device.hpp>
+
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#include <vulkan/window.hpp>
-#include <vulkan/vulkan_context.hpp>
 
+int main(int argc, char** argv) {
+	(void)argc;
 
-int main() {
-    try {
-        Window window;
-        std::cout << "Window created: " << window.get_width() << "x" << window.get_height()<< "\n";
+	try {
+		paths::init(argv[0]);
 
-        VulkanContext vk{window.get_window()};
-        std::cout << "Vulkan initialized.\n\n";
-        std::cout << "Setup complete. Close the window or press ESC to exit.\n";
+		std::cout << "Project root: " << paths::root().string() << "\n";
 
-        while (!window.should_close()) {
-            glfwPollEvents();
+		Window window{ settings::WINDOW_WIDTH, settings::WINDOW_HEIGHT, settings::WINDOW_TITLE };
 
-            if (vk.resize_requested) {
-                vk.resize_swapchain();
-            }
+		VulkanDevice device{ window.handle() };
+		Renderer     renderer{ window, device };
 
-            if (glfwGetKey(window.get_window(), GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-                glfwSetWindowShouldClose(window.get_window(), GLFW_TRUE);
-            }
+		std::cout << "Ready. ESC or close the window to exit.\n";
 
-            vk.draw();
-            
-        }
+		double lastTime = glfwGetTime();
 
-    } catch (const std::exception& e) {
-        std::cerr << "FATAL: " << e.what() << "\n";
-        return EXIT_FAILURE;
-    }
+		while (!window.should_close()) {
+			window.poll_events();
 
-    std::cout << "Clean shutdown.\n";
-    return EXIT_SUCCESS;
+			const double now = glfwGetTime();
+			const float dt = static_cast<float>(std::min(now - lastTime, 0.1));
+			lastTime = now;
+
+			if (window.key_pressed(GLFW_KEY_ESCAPE)) {
+				window.request_close();
+			}
+
+			renderer.update(dt);
+			renderer.draw();
+		}
+
+	}
+	catch (const std::exception& e) {
+		std::cerr << "FATAL: " << e.what() << "\n";
+		return EXIT_FAILURE;
+	}
+
+	std::cout << "Clean shutdown.\n";
+	return EXIT_SUCCESS;
 }
