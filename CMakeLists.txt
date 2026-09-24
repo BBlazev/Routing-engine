@@ -13,8 +13,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
 
+# Warning flags are wrapped in $<$<COMPILE_LANGUAGE:CXX>:...> so they only
+# reach C++ files. The routing library builds zlib, which is C, and flags like
+# -Wold-style-cast are meaningless (and warned about) there.
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(
+    set(PROJECT_CXX_WARNINGS
         -Wall -Wextra -Wpedantic
         -Wconversion -Wshadow -Wnon-virtual-dtor
         -Wold-style-cast -Wcast-align -Wunused
@@ -22,12 +25,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wnull-dereference -Wdouble-promotion
         -Wformat=2 -Wimplicit-fallthrough
     )
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${PROJECT_CXX_WARNINGS}>")
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
         add_link_options(-fsanitize=address,undefined)
     endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    add_compile_options(/W4 /permissive-)
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/W4;/permissive->")
 endif()
 
 
@@ -38,6 +42,9 @@ endif()
 
 
 include(cmake/dependencies.cmake)
+
+# Routing library (OSM parsing, graph, shortest paths). Independent of Vulkan.
+add_subdirectory(routing)
 
 
 add_executable(${PROJECT_NAME}
@@ -68,6 +75,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     imgui
     stb_image
     fastgltf
+    routing
 )
 
 target_compile_definitions(vulkan-streaming PRIVATE
@@ -105,6 +113,13 @@ endforeach()
 
 add_custom_target(shaders DEPENDS ${SPIRV_OUTPUTS})
 add_dependencies(${PROJECT_NAME} shaders)
+
+
+# Console tool for testing routing without the renderer. It borrows only
+# core/paths.hpp from the engine, which is plain std:: code.
+add_executable(routing_cli tools/routing_cli/main.cpp)
+target_include_directories(routing_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(routing_cli PRIVATE routing)
 
 
 option(BUILD_TESTS "Build stress tests" ON)

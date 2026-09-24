@@ -3,9 +3,11 @@
 #include <platform/window.hpp>
 #include <renderer/vk_renderer.hpp>
 #include <vulkan/vk_device.hpp>
+#include <routing/parser.hpp>
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 
 int main(int argc, char** argv) {
@@ -15,6 +17,19 @@ int main(int argc, char** argv) {
 		paths::init(argv[0]);
 
 		std::cout << "Project root: " << paths::root().string() << "\n";
+
+		// Smoke test: proves the routing library links into the engine and the
+		// data loads. Temporary -- Phase 1 replaces this with real map loading.
+		{
+			const auto osmPath = paths::asset("zagreb.osm.pbf");
+			if (std::filesystem::exists(osmPath)) {
+				routing::Graph roads = routing::build_graph(osmPath.string());
+				std::cout << "Road graph: " << roads.adj.size() << " vertices\n";
+			}
+			else {
+				std::cout << "No OSM file at " << osmPath.string() << " -- routing skipped\n";
+			}
+		}
 
 		Window window{ settings::WINDOW_WIDTH, settings::WINDOW_HEIGHT, settings::WINDOW_TITLE };
 
