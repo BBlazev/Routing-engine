@@ -1,9 +1,14 @@
-#include <osmium/geom/haversine.hpp>
-#include <osmium/handler/node_locations_for_ways.hpp>
-#include <osmium/index/map/flex_mem.hpp>
-#include <osmium/io/pbf_input.hpp>
-#include <osmium/visitor.hpp>
 #include <routing/parser.hpp>
+
+// Only the PBF reader. <osmium/io/any_input.hpp> would also pull in the XML,
+// O5M and OPL readers plus bzip2 and gzip support, each needing another
+// library (expat, bzip2) that we'd have to build on Windows for nothing.
+#include <osmium/io/pbf_input.hpp>
+
+#include <osmium/geom/haversine.hpp>                  
+#include <osmium/handler/node_locations_for_ways.hpp> 
+#include <osmium/index/map/flex_mem.hpp>              
+#include <osmium/visitor.hpp>                         
 
 #include <algorithm>
 #include <array>
@@ -15,152 +20,173 @@ namespace routing {
 
 namespace {
 
-using idx_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type,
-                                             osmium::Location>;
+using idx_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, osmium::Location>;
 using location_handler_type = osmium::handler::NodeLocationsForWays<idx_type>;
 
-constexpr std::array<std::string_view, 13> keys = {
-    {"living_street", "motorway", "motorway_link", "primary", "primary_link",
-     "residential", "secondary", "secondary_link", "tertiary", "tertiary_link",
-     "trunk", "trunk_link", "unclassified"}};
+constexpr std::array<std::string_view, 13> keys =
+{ {
+	"living_street", "motorway", "motorway_link", "primary", "primary_link",
+	"residential", "secondary", "secondary_link", "tertiary", "tertiary_link",
+	"trunk", "trunk_link", "unclassified"
+} };
 static_assert(std::is_sorted(keys.begin(), keys.end()));
 
-bool is_road(std::string_view s) {
-  return std::binary_search(keys.begin(), keys.end(), s);
+bool is_road(std::string_view s)
+{
+	return std::binary_search(keys.begin(), keys.end(), s);
 }
 
 /*
-    passA -- WHICH NODES ARE INTERSECTIONS?
+	passA -- WHICH NODES ARE INTERSECTIONS?
 
-In this pass we try to extract only nodes that are meaningful, eg.
-intersections. Road can be made of multiple nodes, but not all are intersection,
-some are there just to make curve on road. So for each way, we iterate through
-its nodes and bump up counter depending on how many times it showed up. Node
-that has been seen in >= 2 ways is intersection.
+In this pass we try to extract only nodes that are meaningful, eg. intersections.
+Road can be made of multiple nodes, but not all are intersection, some are there just to make curve on road.
+So for each way, we iterate through its nodes and bump up counter depending on how many times it showed up.
+Node that has been seen in >= 2 ways is intersection.
 
-We also bump first and last node to be "intersection" because we dont want to
-exclude ending of any road.
+We also bump first and last node to be "intersection" because we dont want to exclude ending of any road.
 
 passA result:
 nodes -> 199236
 intersections -> 29048
 only those 29038 we insert in graph (adj list)
 */
-struct FileHandler : public osmium::handler::Handler {
-  std::unordered_map<osmium::object_id_type, uint8_t> count;
-  std::unordered_map<osmium::object_id_type, uint32_t> vertex_index;
+struct FileHandler : public osmium::handler::Handler
+{
+	std::unordered_map<osmium::object_id_type, uint8_t>  count;
+	std::unordered_map<osmium::object_id_type, uint32_t> vertex_index;
 
-  void way(const osmium::Way &way) {
-    const char *highway = way.tags()["highway"];
-    if (highway && is_road(highway)) {
-      for (const auto &n : way.nodes())
-        count[n.ref()]++;
+	void way(const osmium::Way& way)
+	{
+		const char* highway = way.tags()["highway"];
+		if (highway && is_road(highway))
+		{
+			for (const auto& n : way.nodes())
+				count[n.ref()]++;
 
-      count[way.nodes().front().ref()]++;
-      count[way.nodes().back().ref()]++;
-    }
-  }
+			count[way.nodes().front().ref()]++;
+			count[way.nodes().back().ref()]++;
+		}
+	}
 };
 
 /*
-    passB -- WHICH ROADS CONNECT INTERSECTIONS, AND HOW LONG THEY ARE?
+	passB -- WHICH ROADS CONNECT INTERSECTIONS, AND HOW LONG THEY ARE?
 
 We again read all ways.
-But this time we itereate over every node and calculate distance from previous
-node to this one. When it finds node that is intersection we insert it in adj
-list and reset dist. -adj list is whole graph itself-
+But this time we itereate over every node and calculate distance from previous node to this one.
+When it finds node that is intersection we insert it in adj list and reset dist.
+-adj list is whole graph itself-
 */
-struct GraphBuilder : public osmium::handler::Handler {
-  const std::unordered_map<osmium::object_id_type, uint32_t> &vertex_index;
-  std::vector<std::vector<Edge>> adj;
+struct GraphBuilder : public osmium::handler::Handler
+{
+	const std::unordered_map<osmium::object_id_type, uint32_t>& vertex_index;
+	std::vector<std::vector<Edge>> adj;
+	std::vector<LatLon> latlon;   
 
-  explicit GraphBuilder(
-      const std::unordered_map<osmium::object_id_type, uint32_t> &vi)
-      : vertex_index(vi) {
-    adj.resize(vertex_index.size());
-  }
+	explicit GraphBuilder(const std::unordered_map<osmium::object_id_type, uint32_t>& vi)
+		: vertex_index(vi)
+	{
+		adj.resize(vertex_index.size());
+		latlon.resize(vertex_index.size());
+	}
 
-  void way(const osmium::Way &way) {
-    const char *highway = way.tags()["highway"];
-    if (highway && is_road(highway)) {
-      std::string_view oneway =
-          way.tags()["oneway"] ? way.tags()["oneway"] : "";
-      std::string_view junction =
-          way.tags()["junction"] ? way.tags()["junction"] : "";
+	void way(const osmium::Way& way)
+	{
+		const char* highway = way.tags()["highway"];
+		if (highway && is_road(highway))
+		{
+			std::string_view oneway = way.tags()["oneway"] ? way.tags()["oneway"] : "";
+			std::string_view junction = way.tags()["junction"] ? way.tags()["junction"] : "";
 
-      bool forward_ok = true;
-      bool backward_ok = true;
+			bool forward_ok = true;
+			bool backward_ok = true;
 
-      if (oneway == "yes" || oneway == "1" || oneway == "true")
-        backward_ok = false;
-      else if (oneway == "-1")
-        forward_ok = false;
+			if (oneway == "yes" || oneway == "1" || oneway == "true")
+				backward_ok = false;
+			else if (oneway == "-1")
+				forward_ok = false;
 
-      if (junction == "roundabout")
-        backward_ok = false;
+			if (junction == "roundabout")
+				backward_ok = false;
 
-      // at start, last_vertex is just first vertex
-      uint32_t last_vertex = vertex_index.at(way.nodes().front().ref());
-      osmium::Location prev_loc = way.nodes().front().location();
-      double dist = 0;
+			uint32_t         last_vertex = vertex_index.at(way.nodes().front().ref());
+			osmium::Location prev_loc = way.nodes().front().location();
+			double           dist = 0;
 
-      for (const auto &n : way.nodes()) {
-        // first node is the start vertex itself, dist 0 -> gets skipped
-        dist += osmium::geom::haversine::distance(prev_loc, n.location());
+			for (const auto& n : way.nodes())
+			{
+				dist += osmium::geom::haversine::distance(prev_loc, n.location());
+				prev_loc = n.location();
 
-        prev_loc = n.location();
+				auto y = vertex_index.find(n.ref());
 
-        // checking if this node is a vertex node
-        auto y = vertex_index.find(n.ref());
+				if (y != vertex_index.end())
+				{
 
-        if (y != vertex_index.end()) {
-          if (dist == 0)
-            continue;
+					latlon[y->second] = { n.location().lat(), n.location().lon() };
 
-          if (forward_ok)
-            adj[last_vertex].push_back({y->second, dist});
-          if (backward_ok)
-            adj[y->second].push_back({last_vertex, dist});
+					if (dist == 0) continue;
 
-          last_vertex = y->second;
-          dist = 0;
-        }
-      }
-    }
-  }
+					if (forward_ok)
+						adj[last_vertex].push_back({ y->second, dist });
+					if (backward_ok)
+						adj[y->second].push_back({ last_vertex, dist });
+
+					last_vertex = y->second;
+					dist = 0;
+				}
+			}
+		}
+	}
 };
 
 } // namespace
 
-Graph build_graph(const std::string &path) {
-  osmium::io::File file(path);
+Graph build_graph(const std::string& path)
+{
+	osmium::io::File file(path);
 
-  osmium::io::Reader reader{file, osmium::osm_entity_bits::way};
-  osmium::io::Reader reader2{file, osmium::osm_entity_bits::node |
-                                       osmium::osm_entity_bits::way};
+	osmium::io::Reader reader{ file, osmium::osm_entity_bits::way };
+	osmium::io::Reader reader2{ file, osmium::osm_entity_bits::node | osmium::osm_entity_bits::way };
 
-  idx_type index;
+	idx_type index;
 
-  location_handler_type _handler{index};
+	location_handler_type _handler{ index };
 
-  FileHandler passA;
+	FileHandler passA;
 
-  osmium::apply(reader, passA);
+	osmium::apply(reader, passA);
 
-  std::cout << passA.count.size() << std::endl;
+	std::cout << passA.count.size() << std::endl;
 
-  uint32_t num = 0;
-  for (auto &n : passA.count) {
-    if (n.second >= 2)
-      passA.vertex_index[n.first] = num++;
-  }
+	uint32_t num = 0;
+	for (auto& n : passA.count)
+	{
+		if (n.second >= 2)
+			passA.vertex_index[n.first] = num++;
+	}
 
-  GraphBuilder passB{passA.vertex_index};
-  osmium::apply(reader2, _handler, passB);
+	GraphBuilder passB{ passA.vertex_index };
+	osmium::apply(reader2, _handler, passB);
 
-  Graph g;
-  g.adj = std::move(passB.adj);
-  return g;
+	Graph g;
+	g.adj = std::move(passB.adj);
+
+	LatLon lo{ +90.0, +180.0 };
+	LatLon hi{ -90.0, -180.0 };
+	for (const LatLon& p : passB.latlon)
+	{
+		lo.lat = std::min(lo.lat, p.lat);  hi.lat = std::max(hi.lat, p.lat);
+		lo.lon = std::min(lo.lon, p.lon);  hi.lon = std::max(hi.lon, p.lon);
+	}
+	g.origin = { (lo.lat + hi.lat) / 2.0, (lo.lon + hi.lon) / 2.0 };
+
+	g.position.reserve(passB.latlon.size());
+	for (const LatLon& p : passB.latlon)
+		g.position.push_back(to_local(p, g.origin));
+
+	return g;
 }
 
 } // namespace routing

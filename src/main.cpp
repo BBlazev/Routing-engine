@@ -18,8 +18,6 @@ int main(int argc, char** argv) {
 
 		std::cout << "Project root: " << paths::root().string() << "\n";
 
-		// Smoke test: proves the routing library links into the engine and the
-		// data loads. Temporary -- Phase 1 replaces this with real map loading.
 		{
 			const auto osmPath = paths::asset("zagreb.osm.pbf");
 			if (std::filesystem::exists(osmPath)) {
