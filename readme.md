@@ -1,4 +1,4 @@
-# vulkan-streaming
+# Routing Engine
 
 A real-time route search visualiser for OpenStreetMap road networks, built on a Vulkan renderer I wrote from scratch in C++.
 
