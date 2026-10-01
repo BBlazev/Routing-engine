@@ -1,10 +1,6 @@
 #include <routing/parser.hpp>
 
-// Only the PBF reader. <osmium/io/any_input.hpp> would also pull in the XML,
-// O5M and OPL readers plus bzip2 and gzip support, each needing another
-// library (expat, bzip2) that we'd have to build on Windows for nothing.
 #include <osmium/io/pbf_input.hpp>
-
 #include <osmium/geom/haversine.hpp>                  
 #include <osmium/handler/node_locations_for_ways.hpp> 
 #include <osmium/index/map/flex_mem.hpp>              
@@ -82,7 +78,9 @@ struct GraphBuilder : public osmium::handler::Handler
 {
 	const std::unordered_map<osmium::object_id_type, uint32_t>& vertex_index;
 	std::vector<std::vector<Edge>> adj;
-	std::vector<LatLon> latlon;   
+	std::vector<LatLon> latlon;
+	std::vector<Segment> segments;
+	std::vector<LatLon> point_latlon;
 
 	explicit GraphBuilder(const std::unordered_map<osmium::object_id_type, uint32_t>& vi)
 		: vertex_index(vi)
@@ -99,6 +97,11 @@ struct GraphBuilder : public osmium::handler::Handler
 			std::string_view oneway = way.tags()["oneway"] ? way.tags()["oneway"] : "";
 			std::string_view junction = way.tags()["junction"] ? way.tags()["junction"] : "";
 
+			const std::string_view hw = highway;
+			const bool implied_oneway = hw == "motorway"
+				|| junction == "roundabout"
+				|| junction == "circular";
+
 			bool forward_ok = true;
 			bool backward_ok = true;
 
@@ -106,35 +109,44 @@ struct GraphBuilder : public osmium::handler::Handler
 				backward_ok = false;
 			else if (oneway == "-1")
 				forward_ok = false;
-
-			if (junction == "roundabout")
+			else if (oneway != "no" && implied_oneway)
 				backward_ok = false;
 
-			uint32_t         last_vertex = vertex_index.at(way.nodes().front().ref());
+			uint32_t last_vertex = vertex_index.at(way.nodes().front().ref());
 			osmium::Location prev_loc = way.nodes().front().location();
-			double           dist = 0;
+			double dist = 0;
+
+			auto seg_start = static_cast<uint32_t>(point_latlon.size());
+			bool first = true;
 
 			for (const auto& n : way.nodes())
 			{
 				dist += osmium::geom::haversine::distance(prev_loc, n.location());
 				prev_loc = n.location();
 
+				point_latlon.push_back({ n.location().lat(), n.location().lon() });
+
 				auto y = vertex_index.find(n.ref());
 
 				if (y != vertex_index.end())
 				{
-
 					latlon[y->second] = { n.location().lat(), n.location().lon() };
 
-					if (dist == 0) continue;
+					if (first) { first = false; continue; }
+
+					const auto seg_end = static_cast<uint32_t>(point_latlon.size() - 1);
+					const auto seg_id = static_cast<uint32_t>(segments.size());
+					segments.push_back({ last_vertex, y->second, seg_start, seg_end - seg_start + 1 });
 
 					if (forward_ok)
-						adj[last_vertex].push_back({ y->second, dist });
+						adj[last_vertex].push_back({ y->second, dist, seg_id });
 					if (backward_ok)
-						adj[y->second].push_back({ last_vertex, dist });
+						adj[y->second].push_back({ last_vertex, dist, seg_id });
 
 					last_vertex = y->second;
 					dist = 0;
+
+					seg_start = seg_end;
 				}
 			}
 		}
@@ -160,12 +172,17 @@ Graph build_graph(const std::string& path)
 
 	std::cout << passA.count.size() << std::endl;
 
+
+	std::vector<osmium::object_id_type> ids;
+	for (const auto& [id, c] : passA.count)
+		if (c >= 2)
+			ids.push_back(id);
+
+	std::sort(ids.begin(), ids.end());
+
 	uint32_t num = 0;
-	for (auto& n : passA.count)
-	{
-		if (n.second >= 2)
-			passA.vertex_index[n.first] = num++;
-	}
+	for (osmium::object_id_type id : ids)
+		passA.vertex_index[id] = num++;
 
 	GraphBuilder passB{ passA.vertex_index };
 	osmium::apply(reader2, _handler, passB);
@@ -185,6 +202,12 @@ Graph build_graph(const std::string& path)
 	g.position.reserve(passB.latlon.size());
 	for (const LatLon& p : passB.latlon)
 		g.position.push_back(to_local(p, g.origin));
+
+	g.points.reserve(passB.point_latlon.size());
+	for (const LatLon& p : passB.point_latlon)
+		g.points.push_back(to_local(p, g.origin));
+
+	g.segments = std::move(passB.segments);
 
 	return g;
 }

@@ -5,17 +5,12 @@ project(vulkan-streaming
     LANGUAGES CXX
 )
 
-
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)            
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)     
 
 
-
-# Warning flags are wrapped in $<$<COMPILE_LANGUAGE:CXX>:...> so they only
-# reach C++ files. The routing library builds zlib, which is C, and flags like
-# -Wold-style-cast are meaningless (and warned about) there.
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(PROJECT_CXX_WARNINGS
         -Wall -Wextra -Wpedantic
@@ -43,7 +38,6 @@ endif()
 
 include(cmake/dependencies.cmake)
 
-# Routing library (OSM parsing, graph, shortest paths). Independent of Vulkan.
 add_subdirectory(routing)
 
 
@@ -58,6 +52,7 @@ add_executable(${PROJECT_NAME}
     src/renderer/vk_loader.cpp
 	src/renderer/camera.cpp
 	src/renderer/vk_renderer.cpp
+	src/city/road_mesh.cpp
 )
     
 
@@ -114,9 +109,6 @@ endforeach()
 add_custom_target(shaders DEPENDS ${SPIRV_OUTPUTS})
 add_dependencies(${PROJECT_NAME} shaders)
 
-
-# Console tool for testing routing without the renderer. It borrows only
-# core/paths.hpp from the engine, which is plain std:: code.
 add_executable(routing_cli tools/routing_cli/main.cpp)
 target_include_directories(routing_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(routing_cli PRIVATE routing)

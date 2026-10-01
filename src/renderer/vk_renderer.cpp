@@ -65,7 +65,12 @@ void Renderer::destroy() noexcept {
 
 	for (auto& mesh : meshes_) {
 		device_.destroy_mesh(mesh->meshBuffers);
+
 	}
+
+	for (LineLayer& L : lineLayers_)
+		device_.destroy_mesh(L.mesh);
+
 	meshes_.clear();
 
 	for (auto& frame : frames_) {  
@@ -83,6 +88,48 @@ void Renderer::destroy() noexcept {
 	swapchain_.destroy();
 }
 
+
+void Renderer::set_lines(uint32_t layer, std::span<const uint32_t> indices, std::span<const Vertex> vertices) {
+	if (layer >= kLineLayers)
+		throw std::runtime_error("set_lines: layer index out of range");
+
+	LineLayer& L = lineLayers_[layer];
+
+	if (L.indexCount > 0) {
+		device_.wait_idle();
+		device_.destroy_mesh(L.mesh);
+		L = {};   // null handles, so destroy() won't free them twice
+	}
+
+	if (indices.empty()) return;
+
+	L.mesh = device_.upload_mesh(indices, vertices);
+	L.indexCount = static_cast<uint32_t>(indices.size());
+}
+
+std::optional<glm::vec3> Renderer::screen_to_ground(double mouseX, double mouseY) const {
+
+	int w = 0, h = 0;
+	glfwGetWindowSize(window_.handle(), &w, &h);
+	if (w == 0 || h == 0) return std::nullopt;
+
+	const float ndcX = static_cast<float>(2.0 * mouseX / w - 1.0);
+	const float ndcY = static_cast<float>(2.0 * mouseY / h - 1.0);
+
+	const glm::mat4 inv = glm::inverse(sceneData_.viewproj);
+	glm::vec4 nearPoint = inv * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+	glm::vec4 farPoint = inv * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+	nearPoint /= nearPoint.w; 
+	farPoint /= farPoint.w;
+
+	const glm::vec3 origin = glm::vec3(nearPoint);
+	const glm::vec3 direction = glm::vec3(farPoint) - origin;
+
+	if (direction.y >= 0.0f) return std::nullopt;
+
+	const float t = -origin.y / direction.y;
+	return origin + t * direction;
+}
 
 void Renderer::init_swapchain() {
 	const VkExtent2D fb = window_.framebuffer_extent();
@@ -180,7 +227,44 @@ void Renderer::init_pipelines() {
 
 	init_background_pipeline();
 	init_mesh_pipeline();
+	init_line_pipeline();
 
+}
+
+void Renderer::init_line_pipeline() {
+
+	VkShaderModule vertexShader = VK_NULL_HANDLE;
+	VkShaderModule fragmentShader = VK_NULL_HANDLE;
+
+	if (!load_shader_module(paths::shader("colored_triangle_mesh.vert.spv"),
+		device_.device(), &vertexShader)) {
+		throw std::runtime_error("Could not load colored_triangle_mesh.vert.spv");
+	}
+	if (!load_shader_module(paths::shader("line.frag.spv"), device_.device(), &fragmentShader)) {
+		vkDestroyShaderModule(device_.device(), vertexShader, nullptr);
+		throw std::runtime_error("Could not load line.frag.spv");
+	}
+
+	PipelineBuilder builder;
+	builder.pipelineLayout = meshPipelineLayout_;           
+	builder.set_shaders(vertexShader, fragmentShader);
+	builder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	builder.set_polygon_mode(VK_POLYGON_MODE_FILL);  
+	builder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	builder.set_multisampling_none();
+	builder.disable_blending();
+	builder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+	builder.set_color_attachment_format(drawImage_.imageFormat);
+	builder.set_depth_format(depthImage_.imageFormat);
+
+	linePipeline_ = builder.build_pipeline(device_.device());
+
+	vkDestroyShaderModule(device_.device(), vertexShader, nullptr);
+	vkDestroyShaderModule(device_.device(), fragmentShader, nullptr);
+
+	mainDeletionQueue_.push_function([this]() {
+		vkDestroyPipeline(device_.device(), linePipeline_, nullptr);
+	});
 }
 
 void Renderer::init_background_pipeline() {
@@ -595,6 +679,21 @@ void Renderer::draw_geometry(VkCommandBuffer cmd) {
 	for (const GeoSurface& surface : mesh->surfaces) {
 		vkCmdDrawIndexed(cmd, surface.count, 1, surface.startIndex, 0, 0);
 	}
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline_);
+
+	for (const LineLayer& L : lineLayers_) {
+		if (L.indexCount == 0) continue;
+
+		GPUDrawPushConstants linePc{};
+		linePc.worldMatrix = sceneData_.viewproj;
+		linePc.vertexBuffer = L.mesh.vertexBufferAddress;
+		vkCmdPushConstants(cmd, meshPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+			sizeof(GPUDrawPushConstants), &linePc);
+
+		vkCmdBindIndexBuffer(cmd, L.mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, L.indexCount, 1, 0, 0, 0);
+	}
+
 
 	vkCmdEndRendering(cmd);
 }

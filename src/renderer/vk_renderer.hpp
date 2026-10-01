@@ -13,6 +13,8 @@
 
 #include <memory>
 #include <vector>
+#include <array>
+#include <optional>
 
 class Window;
 
@@ -44,6 +46,16 @@ public:
 	void update(float deltaSeconds);
 	void draw();
 
+	struct LineLayer {
+		GPUMeshBuffers mesh{};
+		uint32_t       indexCount = 0;
+	};
+
+	static constexpr uint32_t kLineLayers = 4;
+	std::array<LineLayer, kLineLayers> lineLayers_{};
+
+	void set_lines(uint32_t layer, std::span<const uint32_t> indices, std::span<const Vertex> vertices);
+	std::optional<glm::vec3> screen_to_ground(double mouseX, double mouseY) const;
 	[[nodiscard]] Camera& camera() { return camera_; }
 
 private:
@@ -54,6 +66,7 @@ private:
 	void init_sync_structures();
 	void init_descriptors();
 	void init_pipelines();
+	void init_line_pipeline();
 	void init_background_pipeline();
 	void init_mesh_pipeline();
 	void init_imgui();
@@ -67,6 +80,8 @@ private:
 	void draw_background(VkCommandBuffer cmd);
 	void draw_geometry(VkCommandBuffer cmd);
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetView);
+
+
 
 	void handle_resize();
 	void destroy() noexcept;
@@ -99,10 +114,14 @@ private:
 	VkPipeline meshPipeline_ = VK_NULL_HANDLE;
 	VkPipelineLayout meshPipelineLayout_ = VK_NULL_HANDLE;
 
+	VkPipeline linePipeline_ = VK_NULL_HANDLE;
+
 	DeletionQueue mainDeletionQueue_;
 
 	Camera camera_;
 	GPUSceneData sceneData_{};
+
+
 
 	VkSampler defaultSamplerLinear_ = VK_NULL_HANDLE;
 	VkSampler defaultSamplerNearest_ = VK_NULL_HANDLE;
